@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Dhakad Pro Trading</title>
+<script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+<style>
+  :root { --bg:#0d1117; --panel:#161b22; --border:#30363d; --text:#e6edf3;
+          --muted:#8b949e; --green:#26a641; --red:#f85149; --accent:#58a6ff; }
+  * { box-sizing:border-box; margin:0; }
+  body { background:var(--bg); color:var(--text); font-family:Segoe UI,system-ui,sans-serif; }
+  header { display:flex; align-items:center; gap:16px; padding:10px 16px;
+           background:var(--panel); border-bottom:1px solid var(--border); }
+  header h1 { font-size:16px; color:var(--accent); white-space:nowrap; }
+  .search { position:relative; flex:1; max-width:420px; }
+  .search input { width:100%; padding:8px 12px; background:var(--bg);
+    border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:14px; }
+  #tf { padding:6px 8px; background:var(--bg); border:1px solid var(--border);
+    border-radius:6px; color:var(--text); font-size:13px; }
+  .results { position:absolute; top:40px; left:0; right:0; background:var(--panel);
+    border:1px solid var(--border); border-radius:6px; max-height:320px; overflow-y:auto;
+    z-index:50; display:none; }
+  .results div { padding:8px 12px; cursor:pointer; font-size:13px; }
+  .results div:hover { background:#21262d; }
+  .results small { color:var(--muted); }
+  #status { font-size:12px; color:var(--muted); margin-left:auto; }
+  main { display:grid; grid-template-columns: 1fr 320px; gap:0; height:calc(100vh - 53px); }
+  #chart { width:100%; height:100%; }
+  aside { background:var(--panel); border-left:1px solid var(--border);
+          padding:14px; overflow-y:auto; font-size:13px; }
+  aside h2 { font-size:13px; color:var(--muted); text-transform:uppercase;
+             letter-spacing:1px; margin:14px 0 8px; }
+  aside h2:first-child { margin-top:0; }
+  .bias { font-size:20px; font-weight:700; padding:10px; border-radius:8px;
+          text-align:center; margin-bottom:6px; }
+  .bias.BULLISH { background:rgba(38,166,65,.15); color:var(--green); }
+  .bias.BEARISH { background:rgba(248,81,73,.15); color:var(--red); }
+  .bias.NEUTRAL { background:rgba(139,148,158,.15); color:var(--muted); }
+  table { width:100%; border-collapse:collapse; }
+  td { padding:4px 2px; border-bottom:1px solid var(--border); }
+  td:last-child { text-align:right; font-variant-numeric:tabular-nums; }
+  .up { color:var(--green); } .down { color:var(--red); } .flat { color:var(--muted); }
+  .plan { background:var(--bg); border:1px solid var(--border); border-radius:8px;
+          padding:10px; margin-top:6px; }
+  .plan .warn { color:#d29922; font-size:11px; margin-top:8px; }
+  .muted { color:var(--muted); font-size:12px; }
+  .btn { background:var(--bg); border:1px solid var(--border); color:var(--text);
+         padding:6px 10px; border-radius:6px; cursor:pointer; font-size:12px;
+         margin:0 6px 8px 0; }
+  .btn:hover { border-color:var(--accent); }
+</style>
+</head>
+<body>
+<header>
+  <h1>⚡ Dhakad Pro Trading</h1>
+  <div class="search">
+    <input id="q" placeholder="Search index or stock… (e.g. NIFTY, RELIANCE)" autocomplete="off">
+    <div class="results" id="results"></div>
+  </div>
+  <select id="tf">
+    <option value="1m">1m</option>
+    <option value="5m">5m</option>
+    <option value="15m">15m</option>
+  </select>
+  <div id="status">connecting…</div>
+</header>
+<main>
+  <div id="chart"></div>
+  <aside id="panel">
+    <div class="muted">Search a symbol to begin. During market hours the chart
+    builds live 1-minute candles; analysis appears once ~30 candles exist.</div>
+  </aside>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+let chart, candleSeries, overlays = {}, priceLines = [], current = null, timer = null;
+
+function initChart() {
+  chart = LightweightCharts.createChart($('chart'), {
+    layout: { background: { color: '#0d1117' }, textColor: '#e6edf3' },
+    grid: { vertLines: { color: '#21262d' }, horzLines: { color: '#21262d' } },
+    timeScale: { timeVisible: true, secondsVisible: false },
+    crosshair: { mode: 0 },
+  });
+  candleSeries = chart.addCandlestickSeries({
+    upColor: '#26a641', downColor: '#f85149',
+    wickUpColor: '#26a641', wickDownColor: '#f85149', borderVisible: false,
+  });
+  new ResizeObserver(() => chart.applyOptions({
+    width: $('chart').clientWidth, height: $('chart').clientHeight
+  })).observe($('chart'));
+}
+
+// ---------------- search ----------------
+let searchTimer;
+$('q').addEventListener('input', () => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(doSearch, 250);
+});
+async function doSearch() {
+  const q = $('q').value.trim();
+  const box = $('results');
+  if (q.length < 2) { box.style.display = 'none'; return; }
+  const rows = await fetch(`/api/search?q=${encodeURIComponent(q)}`).then(r => r.json());
+  box.innerHTML = rows.map(r =>
+    `<div data-seg="${r.exchange_segment}" data-token="${r.token}" data-name="${r.trading_symbol}">
+       <b>${r.trading_symbol}</b> <small>${r.name || ''} · ${r.exchange_segment} · ${r.instrument_type || ''}</small>
+     </div>`).join('') || '<div><small>No results</small></div>';
+  box.style.display = 'block';
+  box.querySelectorAll('div[data-token]').forEach(el =>
+    el.addEventListener('click', () => select(el.dataset.seg, el.dataset.token, el.dataset.name)));
+}
+document.addEventListener('click', e => {
+  if (!e.target.closest('.search')) $('results').style.display = 'none';
+});
+
+// ---------------- load symbol ----------------
+async function select(seg, token, name) {
+  current = { seg, token, name };
+  $('results').style.display = 'none';
+  $('q').value = name;
+  document.title = name + ' — Dhakad Pro';
+  if (timer) clearInterval(timer);
+  await refresh(true);
+  timer = setInterval(() => refresh(false), 4000);
+}
+
+async function refresh(full) {
+  if (!current) return;
+  const { seg, token } = current;
+  const tf = $('tf').value;
+  const candles = await fetch(`/api/candles?seg=${seg}&token=${encodeURIComponent(token)}&timeframe=${tf}`).then(r => r.json());
+  if (candles.length) {
+    candleSeries.setData(candles.map(c => ({
+      time: c.ts, open: c.open, high: c.high, low: c.low, close: c.close })));
+  }
+  const analysis = await fetch(`/api/analysis?seg=${seg}&token=${encodeURIComponent(token)}&timeframe=${tf}`).then(r => r.json());
+  renderPanel(analysis, candles.length);
+  drawOverlays(analysis, candles);
+}
+$('tf').addEventListener('change', () => refresh(true));
+
+// ---------------- overlays ----------------
+function ensureLine(key, color, width = 1, style = 0) {
+  if (!overlays[key]) overlays[key] = chart.addLineSeries({
+    color, lineWidth: width, lineStyle: style, priceLineVisible: false,
+    lastValueVisible: false, crosshairMarkerVisible: false });
+  return overlays[key];
+}
+function drawOverlays(a, candles) {
+  if (a.error || !candles.length) return;
+  const times = candles.map(c => c.ts);
+  const mk = arr => arr.map((v, i) => v == null ? null : ({ time: times[i], value: v }))
+                       .filter(Boolean);
+  if (a.series.ema9)  ensureLine('ema9',  '#58a6ff', 1).setData(mk(a.series.ema9));
+  if (a.series.ema21) ensureLine('ema21', '#d29922', 1).setData(mk(a.series.ema21));
+  if (a.series.vwap)  ensureLine('vwap',  '#bc8cff', 2).setData(mk(a.series.vwap));
+  if (a.series.supertrend) ensureLine('st', '#8b949e', 1, 2).setData(mk(a.series.supertrend));
+
+  // price lines for the trade plan
+  priceLines.forEach(pl => candleSeries.removePriceLine(pl));
+  priceLines = [];
+  const p = a.trade_plan;
+  if (p && p.entry) {
+    const add = (price, color, title) => priceLines.push(candleSeries.createPriceLine({
+      price, color, lineWidth: 2, lineStyle: 2, axisLabelVisible: true, title }));
+    add(p.entry, '#58a6ff', 'ENTRY');
+    add(p.sl, '#f85149', 'SL');
+    add(p.t1, '#26a641', 'T1');
+    add(p.t2, '#26a641', 'T2');
+  }
+}
+
+// ---------------- side panel ----------------
+function voteCls(v) { return v > 0 ? 'up' : v < 0 ? 'down' : 'flat'; }
+function voteTxt(v) { return v > 0 ? 'Bullish' : v < 0 ? 'Bearish' : 'Neutral'; }
+
+function renderPanel(a, nCandles) {
+  const el = $('panel');
+  if (a.error) {
+    el.innerHTML = `<div class="muted">${a.error}</div>
+      <div class="muted" style="margin-top:8px">Candles collected: ${nCandles}</div>`;
+    return;
+  }
+  const v = a.values, votes = a.votes;
+  let html = `<div class="bias ${a.bias}">${a.bias} (${a.score > 0 ? '+' : ''}${a.score})</div>
+    <div class="muted" style="text-align:center">LTP ${a.ltp}</div>
+    <h2>Signal votes</h2><table>` +
+    Object.entries(votes).map(([k, val]) =>
+      `<tr><td>${k}</td><td class="${voteCls(val)}">${voteTxt(val)}</td></tr>`).join('') +
+    `</table><h2>Values</h2><table>
+      <tr><td>RSI(14)</td><td>${v.rsi}</td></tr>
+      <tr><td>EMA 9 / 21</td><td>${v.ema9} / ${v.ema21}</td></tr>
+      <tr><td>VWAP</td><td>${v.vwap}</td></tr>
+      <tr><td>ATR(14)</td><td>${v.atr}</td></tr>
+      <tr><td>MACD hist</td><td>${v.macd_hist}</td></tr>`;
+  if (v.cpr) html += `
+      <tr><td>Pivot</td><td>${v.cpr.pivot}</td></tr>
+      <tr><td>CPR</td><td>${v.cpr.bc} – ${v.cpr.tc}</td></tr>
+      <tr><td>R1 / S1</td><td>${v.cpr.r1} / ${v.cpr.s1}</td></tr>
+      <tr><td>PDH / PDL</td><td>${v.cpr.prev_high} / ${v.cpr.prev_low}</td></tr>`;
+  html += '</table><h2>Trade plan</h2>';
+
+  const p = a.trade_plan;
+  if (p && p.entry) {
+    html += `<div class="plan">
+      <table>
+        <tr><td>Direction</td><td class="${p.direction === 'LONG' ? 'up' : 'down'}">${p.direction}</td></tr>
+        <tr><td>Entry</td><td>${p.entry}</td></tr>
+        <tr><td>Stop Loss</td><td class="down">${p.sl}</td></tr>
+        <tr><td>Target 1 (RR ${p.rr_t1})</td><td class="up">${p.t1}</td></tr>
+        <tr><td>Target 2 (RR ${p.rr_t2})</td><td class="up">${p.t2}</td></tr>
+        <tr><td>Risk (pts)</td><td>${p.risk_points}</td></tr>
+      </table>
+      <div class="muted" style="margin-top:6px">${p.reasoning}</div>
+      <div class="warn">⚠ ${p.warning}</div>
+    </div>`;
+  } else {
+    html += `<div class="muted">${(p && p.note) || 'No plan available.'}</div>`;
+  }
+  const prevDeep = document.getElementById('deep')?.innerHTML || '';
+  html += `<h2>Deep analysis</h2>
+    <button class="btn" onclick="runSignal()">🎯 Option signal</button>
+    <button class="btn" onclick="runBacktest()">🧪 Backtest</button>
+    <div id="deep">${prevDeep}</div>`;
+  el.innerHTML = html;
+}
+
+// ---------------- Phase 4/5: option signal + backtest (on demand) ----------------
+async function runSignal() {
+  if (!current) return;
+  const box = $('deep');
+  box.innerHTML = '<div class="muted">Building option signal… (option chain + breadth + news — takes a few seconds)</div>';
+  try {
+    const s = await fetch(`/api/signal?seg=${current.seg}&token=${encodeURIComponent(current.token)}&timeframe=${$('tf').value}`).then(r => r.json());
+    if (s.error) { box.innerHTML = `<div class="muted">${s.error}</div>`; return; }
+    if (s.signal === 'NO_TRADE') {
+      box.innerHTML = `<div class="plan"><b>NO TRADE</b><div class="muted" style="margin-top:6px">${s.reason}</div></div>`;
+      return;
+    }
+    const legs = (s.legs || []).map(l =>
+      `<tr><td>${l.action} ${l.strike} ${l.type}</td><td>${l.ltp ?? '—'}${l.iv ? ' · IV ' + l.iv : ''}</td></tr>`).join('');
+    const pp = s.premium_plan;
+    box.innerHTML = `<div class="plan">
+      <table>
+        <tr><td>Strategy</td><td>${s.strategy}</td></tr>
+        <tr><td>IV regime</td><td>${s.iv_regime}${s.atm_iv ? ' (ATM ' + s.atm_iv + '%)' : ''}</td></tr>
+        <tr><td>Expiry in</td><td>${s.days_to_expiry} days</td></tr>
+        ${legs}
+        ${pp ? `<tr><td>Premium entry</td><td>${pp.entry}</td></tr>
+        <tr><td>Premium SL</td><td class="down">${pp.sl}</td></tr>
+        <tr><td>Premium T1 / T2</td><td class="up">${pp.t1} / ${pp.t2}</td></tr>
+        <tr><td>Delta used</td><td>${pp.delta_used}</td></tr>` : ''}
+        <tr><td>Lot size</td><td>${s.lot_size}</td></tr>
+        ${s.risk_per_lot ? `<tr><td>Risk / lot</td><td>₹${s.risk_per_lot}</td></tr>` : ''}
+      </table>
+      <div class="muted" style="margin-top:6px">${s.strategy_note}</div>
+      <div class="muted" style="margin-top:6px; white-space:pre-wrap">${(s.reasoning && s.reasoning.text) || ''}</div>
+      <div class="warn">⚠ ${s.warning}</div>
+    </div>`;
+  } catch (e) { box.innerHTML = `<div class="muted">Signal failed: ${e}</div>`; }
+}
+
+async function runBacktest() {
+  if (!current) return;
+  const box = $('deep');
+  box.innerHTML = '<div class="muted">Running walk-forward backtest…</div>';
+  try {
+    const b = await fetch(`/api/backtest?seg=${current.seg}&token=${encodeURIComponent(current.token)}&timeframe=${$('tf').value}`).then(r => r.json());
+    if (b.error) { box.innerHTML = `<div class="muted">${b.error}</div>`; return; }
+    const o = b.out_of_sample || {};
+    box.innerHTML = `<div class="plan">
+      <div class="bias ${b.verified ? 'BULLISH' : 'BEARISH'}" style="font-size:14px">
+        ${b.verified ? '✔ VERIFIED (out-of-sample)' : '✘ NOT VERIFIED — do not trade this setup'}</div>
+      <table>
+        <tr><td>Trades (OOS)</td><td>${o.n_trades ?? 0}</td></tr>
+        <tr><td>Win rate</td><td>${o.win_rate != null ? (o.win_rate * 100).toFixed(1) + '%' : '—'}</td></tr>
+        <tr><td>Profit factor</td><td>${o.profit_factor ?? '—'}</td></tr>
+        <tr><td>Net P&L (₹1L notional)</td><td>${o.net_pnl_rs ?? '—'}</td></tr>
+        <tr><td>Max drawdown</td><td>${o.max_drawdown_pct != null ? o.max_drawdown_pct + '%' : '—'}</td></tr>
+      </table>
+      <div class="muted" style="margin-top:6px">${b.honesty_note || ''}</div>
+    </div>`;
+  } catch (e) { box.innerHTML = `<div class="muted">Backtest failed: ${e}</div>`; }
+}
+
+// ---------------- status ----------------
+async function pollStatus() {
+  try {
+    const s = await fetch('/api/status').then(r => r.json());
+    $('status').textContent =
+      `${s.logged_in ? '🟢 logged in' : '🔴 not logged in'} · ` +
+      `${s.market_open ? 'market OPEN' : 'market closed'} · ` +
+      `${s.instruments.toLocaleString()} instruments · ` +
+      `live trading: ${s.live_trading ? '⚠ ON' : 'off (safe)'}`;
+  } catch { $('status').textContent = '🔴 backend unreachable'; }
+}
+
+initChart();
+pollStatus();
+setInterval(pollStatus, 15000);
+</script>
+</body>
+</html>
