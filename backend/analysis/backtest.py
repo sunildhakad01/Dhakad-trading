@@ -1,4 +1,4 @@
-"""Phase 5 backtest engine — tests the confluence indicator strategy on
+"""Backtest engine — tests the confluence indicator strategy on
 stored candles and reports HONEST statistics (costs included).
 
 What it simulates (same logic the live signal engine uses on price data):
@@ -10,7 +10,7 @@ What it simulates (same logic the live signal engine uses on price data):
 
 Walk-forward: split the series into k folds; pick the best threshold on the
 training fold, evaluate it untouched on the next fold. Reported stats come
-ONLY from out-of-sample folds — this is the honest number (CLAUDE.md rule 7/8).
+ONLY from out-of-sample folds — this is the honest number.
 
 A strategy is marked verified=True only if out-of-sample results clear:
   n_trades >= 30, win_rate >= 0.50, profit_factor >= 1.3, max_drawdown < 30%.

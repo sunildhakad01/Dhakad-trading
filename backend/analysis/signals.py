@@ -1,4 +1,4 @@
-"""Phase 4 signal engine.
+"""Option signal engine.
 
 Turns the confluence composite + spot trade plan + option chain into an
 actionable *option* trade plan:
@@ -14,8 +14,8 @@ actionable *option* trade plan:
      converted to option-premium levels via Black-Scholes delta computed
      from the chain's own IV (fallback: moneyness heuristic).
 
-All thresholds here are v1 defaults awaiting Phase 5 backtesting — per
-CLAUDE.md rule 8 they are shown as heuristics, never as verified accuracy.
+All thresholds here are v1 defaults awaiting walk-forward backtesting — they
+are shown as heuristics, never as verified accuracy.
 """
 from __future__ import annotations
 
@@ -187,6 +187,6 @@ def generate(composite: dict, spot_plan: dict, chain: dict,
         "risk_per_lot": risk_per_lot,
         "composite": {"bias": bias, "agreement": agreement,
                       "score": composite.get("score")},
-        "warning": "Heuristic v1 — not yet validated by Phase 5 backtesting. "
+        "warning": "Heuristic v1 — not yet validated by walk-forward backtesting. "
                    "Paper-trade only.",
     }

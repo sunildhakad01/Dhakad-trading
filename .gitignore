@@ -1,6 +1,10 @@
 .env
-data/
+/data/
 __pycache__/
 *.pyc
 *.db
 *.csv
+
+# local-only notes
+CLAUDE.md
+ROADMAP.md

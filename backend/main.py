@@ -180,7 +180,7 @@ def _confluence_bundle(seg: str, token: str, timeframe: str, use_claude: bool):
 @app.get("/api/confluence")
 def confluence_score(seg: str, token: str, timeframe: str = "1m", use_claude: bool = False):
     """Combines price-indicator votes with option-chain PCR, driver-stock
-    breadth, and news sentiment — the modules from Phase 3. Calls out to
+    breadth, and news sentiment. Calls out to
     Kotak quotes (option chain, breadth) and RSS feeds, so this is meant to
     be triggered on demand, not polled every few seconds like /api/analysis."""
     payload, _chain, _instr = _confluence_bundle(seg, token, timeframe, use_claude)
@@ -189,7 +189,7 @@ def confluence_score(seg: str, token: str, timeframe: str = "1m", use_claude: bo
 
 @app.get("/api/signal")
 def signal(seg: str, token: str, timeframe: str = "5m", use_claude: bool = False):
-    """Phase 4: full option trade signal. Confluence gate -> strategy by IV
+    """Full option trade signal. Confluence gate -> strategy by IV
     regime -> delta-translated premium SL/targets -> plain-English rationale."""
     payload, chain, instrument = _confluence_bundle(seg, token, timeframe, use_claude)
     if isinstance(payload, dict) and "error" in payload:
@@ -214,7 +214,7 @@ def signal(seg: str, token: str, timeframe: str = "5m", use_claude: bool = False
 @app.get("/api/backtest")
 def backtest_endpoint(seg: str, token: str, timeframe: str = "1m",
                       mode: str = "walk_forward", threshold: int = 3):
-    """Phase 5: honest backtest of the indicator-confluence strategy on this
+    """Honest backtest of the indicator-confluence strategy on this
     symbol's stored candles. mode=walk_forward (default) or single."""
     minutes = TIMEFRAME_MINUTES.get(timeframe)
     if minutes is None:

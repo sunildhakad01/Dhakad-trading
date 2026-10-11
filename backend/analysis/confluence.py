@@ -7,9 +7,8 @@ actually produced a vote agree; otherwise NEUTRAL.
 
 Equal weights and the 60% cutoff are a v1 default, same status as the
 auto SL/target engine in levels.py: a sensible starting heuristic, not a
-backtested rule. Tune both once Phase 5 backtesting shows which modules
-actually carry predictive value. Per CLAUDE.md rule 8, this is never framed
-as more accurate than that.
+backtested rule. Tune both once walk-forward backtesting shows which modules
+actually carry predictive value. It is never framed as more accurate than that.
 """
 from __future__ import annotations
 

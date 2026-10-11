@@ -2,7 +2,7 @@
 
 - Enforces the 10 req/sec rate limit.
 - Auto re-login on expired session (401 / 1003).
-- Order placement is HARD-GATED behind settings.live_trading (see CLAUDE.md rule 1).
+- Order placement is HARD-GATED behind settings.live_trading.
 """
 from __future__ import annotations
 
@@ -165,7 +165,7 @@ class KotakClient:
         if not settings.live_trading:
             raise LiveTradingDisabled(
                 "LIVE_TRADING=false — refusing to touch real orders. "
-                "This is a deliberate safety switch (see CLAUDE.md)."
+                "This is a deliberate safety switch."
             )
 
     def place_order(self, jdata: dict) -> dict:

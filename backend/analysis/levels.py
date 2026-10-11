@@ -9,7 +9,7 @@ Method (what professional discretionary traders do, encoded):
              if one sits close (within 0.3R) — targets into a wall are cut short.
 
 Everything returned is drawn on the chart by the frontend.
-This logic gets tuned by backtesting in Phase 5 — treat v1 as a sensible default.
+This logic gets tuned by backtesting — treat v1 as a sensible default.
 """
 from __future__ import annotations
 
